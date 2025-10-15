@@ -48,37 +48,46 @@ foreach ($datasets as $datasetId) {
             $downloadUrl = $distribution['resourceDownloadUrl'] ?? null;
 
             if ($downloadUrl) {
-                // Add limit parameter to URL
-                $urlParts = parse_url($downloadUrl);
-                $queryParams = [];
-                if (isset($urlParts['query'])) {
-                    parse_str($urlParts['query'], $queryParams);
-                }
-                $queryParams['limit'] = 1000;
-                $queryParams['offset'] = 0;
-                $downloadUrl = $urlParts['scheme'] . '://' . $urlParts['host'] . $urlParts['path'] . '?' . http_build_query($queryParams);
-
-                $filename = __DIR__ . "/../data/raw/{$datasetId}_{$index}_offset_0.csv";
-
                 // Create data directory if it doesn't exist
-                $dataDir = dirname($filename);
+                $dataDir = __DIR__ . "/../data/raw";
                 if (!is_dir($dataDir)) {
                     mkdir($dataDir, 0755, true);
                 }
 
-                echo "Downloading CSV from: {$downloadUrl}\n";
+                echo "Downloading CSV with first 3 pages from: {$downloadUrl}\n";
 
-                try {
-                    $response = $client->get($downloadUrl);
-                    $csvContent = $response->getBody()->getContents();
-                    file_put_contents($filename, $csvContent);
-                    echo "Saved to: {$filename}\n";
+                // Fetch first 3 pages
+                $limit = 1000;
+                for ($page = 0; $page < 3; $page++) {
+                    $offset = $page * $limit;
 
-                    // Process CSV and group data by year and damname
-                    echo "Processing CSV data...\n";
-                    processCSVtoJSON($filename);
-                } catch (Exception $e) {
-                    echo "Failed to download CSV from {$downloadUrl}: " . $e->getMessage() . "\n";
+                    // Add limit and offset parameters to URL
+                    $urlParts = parse_url($downloadUrl);
+                    $queryParams = [];
+                    if (isset($urlParts['query'])) {
+                        parse_str($urlParts['query'], $queryParams);
+                    }
+                    $queryParams['limit'] = $limit;
+                    $queryParams['offset'] = $offset;
+                    $pageUrl = $urlParts['scheme'] . '://' . $urlParts['host'] . $urlParts['path'] . '?' . http_build_query($queryParams);
+
+                    $filename = __DIR__ . "/../data/raw/{$datasetId}_{$index}_offset_{$offset}.csv";
+
+                    echo "Fetching page " . ($page + 1) . " (offset {$offset})...\n";
+
+                    try {
+                        $response = $client->get($pageUrl);
+                        $csvContent = $response->getBody()->getContents();
+                        file_put_contents($filename, $csvContent);
+                        echo "Saved to: {$filename}\n";
+
+                        // Process CSV and group data by year and damname
+                        echo "Processing CSV data...\n";
+                        processCSVtoJSON($filename);
+                    } catch (Exception $e) {
+                        echo "Failed to download CSV from {$pageUrl}: " . $e->getMessage() . "\n";
+                        break;
+                    }
                 }
             }
         }
