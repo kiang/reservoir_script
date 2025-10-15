@@ -70,6 +70,10 @@ foreach ($datasets as $datasetId) {
                         echo "Processing CSV data...\n";
                         processCSVtoJSON($filename);
                     }
+
+                    // Delete the raw CSV file
+                    unlink($filename);
+                    echo "Deleted raw CSV: {$filename}\n";
                 }
             }
         }
@@ -79,7 +83,7 @@ foreach ($datasets as $datasetId) {
 }
 
 function fetchAllPages($client, $baseUrl) {
-    $limit = 1000;
+    $limit = 10000;
     $offset = 0;
     $allRecords = [];
     $header = null;

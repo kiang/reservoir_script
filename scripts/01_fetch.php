@@ -48,6 +48,15 @@ foreach ($datasets as $datasetId) {
             $downloadUrl = $distribution['resourceDownloadUrl'] ?? null;
 
             if ($downloadUrl) {
+                // Add limit parameter to URL
+                $urlParts = parse_url($downloadUrl);
+                $queryParams = [];
+                if (isset($urlParts['query'])) {
+                    parse_str($urlParts['query'], $queryParams);
+                }
+                $queryParams['limit'] = 10000;
+                $downloadUrl = $urlParts['scheme'] . '://' . $urlParts['host'] . $urlParts['path'] . '?' . http_build_query($queryParams);
+
                 $filename = __DIR__ . "/../data/raw/{$datasetId}_{$index}.csv";
 
                 // Create data directory if it doesn't exist
@@ -69,6 +78,10 @@ foreach ($datasets as $datasetId) {
                         echo "Processing CSV data...\n";
                         processCSVtoJSON($filename);
                     }
+
+                    // Delete the raw CSV file
+                    unlink($filename);
+                    echo "Deleted raw CSV: {$filename}\n";
                 } catch (Exception $e) {
                     echo "Failed to download CSV from {$downloadUrl}: " . $e->getMessage() . "\n";
                 }
