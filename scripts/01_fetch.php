@@ -54,7 +54,7 @@ foreach ($datasets as $datasetId) {
                 if (isset($urlParts['query'])) {
                     parse_str($urlParts['query'], $queryParams);
                 }
-                $queryParams['limit'] = 10000;
+                $queryParams['limit'] = 1000;
                 $queryParams['offset'] = 0;
                 $downloadUrl = $urlParts['scheme'] . '://' . $urlParts['host'] . $urlParts['path'] . '?' . http_build_query($queryParams);
 
@@ -75,10 +75,8 @@ foreach ($datasets as $datasetId) {
                     echo "Saved to: {$filename}\n";
 
                     // Process CSV and group data by year and damname
-                    if ($datasetId === '6345') {
-                        echo "Processing CSV data...\n";
-                        processCSVtoJSON($filename);
-                    }
+                    echo "Processing CSV data...\n";
+                    processCSVtoJSON($filename);
                 } catch (Exception $e) {
                     echo "Failed to download CSV from {$downloadUrl}: " . $e->getMessage() . "\n";
                 }

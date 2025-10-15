@@ -58,21 +58,8 @@ foreach ($datasets as $datasetId) {
 
                 echo "Downloading CSV with pagination from: {$downloadUrl}\n";
 
-                // Fetch all pages and save each page separately
-                $allData = fetchAllPages($client, $downloadUrl, $datasetId, $index);
-
-                // Process CSV and group data by year and damname for dataset 6345
-                if ($allData !== null) {
-                    echo "Processing CSV data...\n";
-
-                    // Create a temporary combined file for processing
-                    $tempFile = __DIR__ . "/../data/raw/{$datasetId}_{$index}_combined.csv";
-                    file_put_contents($tempFile, $allData);
-                    processCSVtoJSON($tempFile);
-
-                    // Delete the temporary combined file
-                    unlink($tempFile);
-                }
+                // Fetch and process pages one by one
+                fetchAndProcessPages($client, $downloadUrl, $datasetId, $index);
             }
         }
     }
@@ -80,11 +67,9 @@ foreach ($datasets as $datasetId) {
     echo "\n";
 }
 
-function fetchAllPages($client, $baseUrl, $datasetId, $index) {
-    $limit = 10000;
+function fetchAndProcessPages($client, $baseUrl, $datasetId, $index) {
+    $limit = 1000;
     $offset = 0;
-    $allRecords = [];
-    $header = null;
 
     while (true) {
         // Parse URL and add limit/offset parameters
@@ -111,21 +96,15 @@ function fetchAllPages($client, $baseUrl, $datasetId, $index) {
             file_put_contents($pageFilename, $csvContent);
             echo "Saved page to: {$pageFilename}\n";
 
-            // Parse CSV content
+            // Parse CSV content to check record count
             $lines = str_getcsv($csvContent, "\n");
 
             if (empty($lines)) {
                 break;
             }
 
-            // First page: extract header
-            if ($header === null) {
-                $header = $lines[0];
-                array_shift($lines); // Remove header from lines
-            } else {
-                // Subsequent pages: remove header line
-                array_shift($lines);
-            }
+            // Remove header line from count
+            array_shift($lines);
 
             // Filter out empty lines
             $lines = array_filter($lines, function($line) {
@@ -133,9 +112,11 @@ function fetchAllPages($client, $baseUrl, $datasetId, $index) {
             });
 
             $recordCount = count($lines);
-            $allRecords = array_merge($allRecords, $lines);
-
             echo "Fetched {$recordCount} records\n";
+
+            // Process this page immediately
+            echo "Processing page data...\n";
+            processCSVtoJSON($pageFilename);
 
             // If we got fewer records than limit, we've reached the end
             if ($recordCount < $limit) {
@@ -146,17 +127,9 @@ function fetchAllPages($client, $baseUrl, $datasetId, $index) {
 
         } catch (Exception $e) {
             echo "Failed to download CSV from {$url}: " . $e->getMessage() . "\n";
-            return null;
+            break;
         }
     }
-
-    // Combine header and all records
-    if ($header !== null && !empty($allRecords)) {
-        array_unshift($allRecords, $header);
-        return implode("\n", $allRecords);
-    }
-
-    return null;
 }
 
 function processCSVtoJSON($csvFile) {
@@ -242,6 +215,21 @@ function processCSVtoJSON($csvFile) {
                 if (file_exists($jsonFile)) {
                     $existingContent = file_get_contents($jsonFile);
                     $existingSites = json_decode($existingContent, true) ?? [];
+
+                    // Convert existing array data back to keyed format
+                    foreach ($existingSites as $siteId => &$siteInfo) {
+                        if (isset($siteInfo['data'])) {
+                            foreach ($siteInfo['data'] as $date => &$entries) {
+                                $keyedEntries = [];
+                                foreach ($entries as $entry) {
+                                    $uniqueKey = $entry['samplelayer'] . '|' . $entry['sampledepth'] . '|' . $entry['itemname'];
+                                    $keyedEntries[$uniqueKey] = $entry;
+                                }
+                                $entries = $keyedEntries;
+                            }
+                        }
+                    }
+                    unset($siteInfo, $entries);
                 }
 
                 // Merge with new data
