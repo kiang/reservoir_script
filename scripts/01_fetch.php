@@ -231,6 +231,38 @@ function processCSVtoJSON($csvFile) {
             }
         }
     }
+
+    // Generate list.json for all years
+    $baseJsonDir = __DIR__ . "/../data/docs/json";
+    if (is_dir($baseJsonDir)) {
+        $yearDirs = glob($baseJsonDir . '/*', GLOB_ONLYDIR);
+        foreach ($yearDirs as $yearDir) {
+            generateListJson($yearDir);
+        }
+    }
+}
+
+function generateListJson($yearDir) {
+    if (!is_dir($yearDir)) {
+        return;
+    }
+
+    $files = [];
+    $jsonFiles = glob($yearDir . '/*.json');
+
+    foreach ($jsonFiles as $jsonFile) {
+        $filename = basename($jsonFile);
+        if ($filename !== 'list.json') {
+            // Remove .json extension
+            $files[] = basename($filename, '.json');
+        }
+    }
+
+    sort($files);
+
+    $listFile = $yearDir . '/list.json';
+    file_put_contents($listFile, json_encode($files, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    echo "Generated list: {$listFile}\n";
 }
 
 echo "Fetch complete\n";
