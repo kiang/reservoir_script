@@ -63,6 +63,12 @@ foreach ($datasets as $datasetId) {
                     $csvContent = $response->getBody()->getContents();
                     file_put_contents($filename, $csvContent);
                     echo "Saved to: {$filename}\n";
+
+                    // Process CSV and group data by year and damname
+                    if ($datasetId === '6345') {
+                        echo "Processing CSV data...\n";
+                        processCSVtoJSON($filename);
+                    }
                 } catch (Exception $e) {
                     echo "Failed to download CSV from {$downloadUrl}: " . $e->getMessage() . "\n";
                 }
@@ -71,6 +77,128 @@ foreach ($datasets as $datasetId) {
     }
 
     echo "\n";
+}
+
+function processCSVtoJSON($csvFile) {
+    $jsonData = [];
+
+    if (($handle = fopen($csvFile, 'r')) !== false) {
+        // Read header row
+        $header = fgetcsv($handle);
+
+        // Remove BOM if present
+        if (!empty($header[0])) {
+            $header[0] = str_replace("\xEF\xBB\xBF", '', $header[0]);
+        }
+
+        $lineCount = 0;
+        while (($data = fgetcsv($handle)) !== false) {
+            $lineCount++;
+            $row = array_combine($header, $data);
+
+            if (empty($row['sampledate']) || empty($row['damname'])) {
+                continue;
+            }
+
+            // Extract year from sampledate
+            $year = date('Y', strtotime($row['sampledate']));
+            $damname = $row['damname'];
+            $sampledate = $row['sampledate'];
+
+            $siteid = $row['siteid'] ?? '';
+
+            // Initialize structure if needed
+            if (!isset($jsonData[$year])) {
+                $jsonData[$year] = [];
+            }
+            if (!isset($jsonData[$year][$damname])) {
+                $jsonData[$year][$damname] = [];
+            }
+            if (!isset($jsonData[$year][$damname][$siteid])) {
+                $jsonData[$year][$damname][$siteid] = [
+                    'twd97lon' => $row['twd97lon'] ?? '',
+                    'twd97lat' => $row['twd97lat'] ?? '',
+                    'data' => []
+                ];
+            }
+
+            // Create unique key for this entry
+            $uniqueKey = $row['samplelayer'] . '|' . $row['sampledepth'] . '|' . $row['itemname'];
+
+            // Create data entry for this sample
+            $entry = [
+                'samplelayer' => $row['samplelayer'] ?? '',
+                'sampledepth' => $row['sampledepth'] ?? '',
+                'itemname' => $row['itemname'] ?? '',
+                'itemengname' => $row['itemengname'] ?? '',
+                'itemengabbreviation' => $row['itemengabbreviation'] ?? '',
+                'itemvalue' => $row['itemvalue'] ?? '',
+                'itemunit' => $row['itemunit'] ?? '',
+                'note' => $row['note'] ?? ''
+            ];
+
+            // Group by sampledate under siteid with unique key
+            if (!isset($jsonData[$year][$damname][$siteid]['data'][$sampledate])) {
+                $jsonData[$year][$damname][$siteid]['data'][$sampledate] = [];
+            }
+            $jsonData[$year][$damname][$siteid]['data'][$sampledate][$uniqueKey] = $entry;
+        }
+
+        fclose($handle);
+        echo "Processed {$lineCount} rows\n";
+
+        // Write JSON files by year and damname
+        foreach ($jsonData as $year => $dams) {
+            foreach ($dams as $damname => $sites) {
+                $jsonDir = __DIR__ . "/../data/docs/json/{$year}";
+                if (!is_dir($jsonDir)) {
+                    mkdir($jsonDir, 0755, true);
+                }
+
+                $jsonFile = $jsonDir . "/" . preg_replace('/[^a-zA-Z0-9_\-\x{4e00}-\x{9fa5}]/u', '_', $damname) . ".json";
+
+                // Load existing JSON file if it exists
+                $existingSites = [];
+                if (file_exists($jsonFile)) {
+                    $existingContent = file_get_contents($jsonFile);
+                    $existingSites = json_decode($existingContent, true) ?? [];
+                }
+
+                // Merge with new data
+                foreach ($sites as $siteId => $siteData) {
+                    if (!isset($existingSites[$siteId])) {
+                        $existingSites[$siteId] = $siteData;
+                    } else {
+                        // Update coordinates if changed
+                        $existingSites[$siteId]['twd97lon'] = $siteData['twd97lon'];
+                        $existingSites[$siteId]['twd97lat'] = $siteData['twd97lat'];
+
+                        // Merge data by date
+                        foreach ($siteData['data'] as $date => $entries) {
+                            if (!isset($existingSites[$siteId]['data'][$date])) {
+                                $existingSites[$siteId]['data'][$date] = [];
+                            }
+
+                            // Merge entries with unique key
+                            foreach ($entries as $key => $entry) {
+                                $existingSites[$siteId]['data'][$date][$key] = $entry;
+                            }
+                        }
+                    }
+                }
+
+                // Convert back to array format for output
+                foreach ($existingSites as $siteId => &$siteInfo) {
+                    foreach ($siteInfo['data'] as $date => &$entries) {
+                        $entries = array_values($entries);
+                    }
+                }
+
+                file_put_contents($jsonFile, json_encode($existingSites, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+                echo "Saved JSON: {$jsonFile}\n";
+            }
+        }
+    }
 }
 
 echo "Fetch complete\n";
