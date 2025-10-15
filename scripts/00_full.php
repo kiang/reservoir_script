@@ -58,22 +58,20 @@ foreach ($datasets as $datasetId) {
 
                 echo "Downloading CSV with pagination from: {$downloadUrl}\n";
 
-                // Fetch all pages
-                $allData = fetchAllPages($client, $downloadUrl);
+                // Fetch all pages and save each page separately
+                $allData = fetchAllPages($client, $downloadUrl, $datasetId, $index);
 
-                if ($allData !== null) {
-                    file_put_contents($filename, $allData);
-                    echo "Saved to: {$filename}\n";
+                // Process CSV and group data by year and damname for dataset 6345
+                if ($datasetId === '6345' && $allData !== null) {
+                    echo "Processing CSV data...\n";
 
-                    // Process CSV and group data by year and damname for dataset 6345
-                    if ($datasetId === '6345') {
-                        echo "Processing CSV data...\n";
-                        processCSVtoJSON($filename);
-                    }
+                    // Create a temporary combined file for processing
+                    $tempFile = __DIR__ . "/../data/raw/{$datasetId}_{$index}_combined.csv";
+                    file_put_contents($tempFile, $allData);
+                    processCSVtoJSON($tempFile);
 
-                    // Delete the raw CSV file
-                    unlink($filename);
-                    echo "Deleted raw CSV: {$filename}\n";
+                    // Delete the temporary combined file
+                    unlink($tempFile);
                 }
             }
         }
@@ -82,7 +80,7 @@ foreach ($datasets as $datasetId) {
     echo "\n";
 }
 
-function fetchAllPages($client, $baseUrl) {
+function fetchAllPages($client, $baseUrl, $datasetId, $index) {
     $limit = 10000;
     $offset = 0;
     $allRecords = [];
@@ -107,6 +105,11 @@ function fetchAllPages($client, $baseUrl) {
         try {
             $response = $client->get($url);
             $csvContent = $response->getBody()->getContents();
+
+            // Save individual page with offset in filename
+            $pageFilename = __DIR__ . "/../data/raw/{$datasetId}_{$index}_offset_{$offset}.csv";
+            file_put_contents($pageFilename, $csvContent);
+            echo "Saved page to: {$pageFilename}\n";
 
             // Parse CSV content
             $lines = str_getcsv($csvContent, "\n");

@@ -55,9 +55,10 @@ foreach ($datasets as $datasetId) {
                     parse_str($urlParts['query'], $queryParams);
                 }
                 $queryParams['limit'] = 10000;
+                $queryParams['offset'] = 0;
                 $downloadUrl = $urlParts['scheme'] . '://' . $urlParts['host'] . $urlParts['path'] . '?' . http_build_query($queryParams);
 
-                $filename = __DIR__ . "/../data/raw/{$datasetId}_{$index}.csv";
+                $filename = __DIR__ . "/../data/raw/{$datasetId}_{$index}_offset_0.csv";
 
                 // Create data directory if it doesn't exist
                 $dataDir = dirname($filename);
@@ -78,10 +79,6 @@ foreach ($datasets as $datasetId) {
                         echo "Processing CSV data...\n";
                         processCSVtoJSON($filename);
                     }
-
-                    // Delete the raw CSV file
-                    unlink($filename);
-                    echo "Deleted raw CSV: {$filename}\n";
                 } catch (Exception $e) {
                     echo "Failed to download CSV from {$downloadUrl}: " . $e->getMessage() . "\n";
                 }
