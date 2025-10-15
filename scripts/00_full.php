@@ -62,7 +62,7 @@ foreach ($datasets as $datasetId) {
                 $allData = fetchAllPages($client, $downloadUrl, $datasetId, $index);
 
                 // Process CSV and group data by year and damname for dataset 6345
-                if ($datasetId === '6345' && $allData !== null) {
+                if ($allData !== null) {
                     echo "Processing CSV data...\n";
 
                     // Create a temporary combined file for processing
@@ -127,13 +127,12 @@ function fetchAllPages($client, $baseUrl, $datasetId, $index) {
                 array_shift($lines);
             }
 
-            $recordCount = count($lines);
-
             // Filter out empty lines
             $lines = array_filter($lines, function($line) {
                 return !empty(trim($line));
             });
 
+            $recordCount = count($lines);
             $allRecords = array_merge($allRecords, $lines);
 
             echo "Fetched {$recordCount} records\n";

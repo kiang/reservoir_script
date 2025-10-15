@@ -172,6 +172,21 @@ function processCSVtoJSON($csvFile) {
                 if (file_exists($jsonFile)) {
                     $existingContent = file_get_contents($jsonFile);
                     $existingSites = json_decode($existingContent, true) ?? [];
+
+                    // Convert existing array data back to keyed format
+                    foreach ($existingSites as $siteId => &$siteInfo) {
+                        if (isset($siteInfo['data'])) {
+                            foreach ($siteInfo['data'] as $date => &$entries) {
+                                $keyedEntries = [];
+                                foreach ($entries as $entry) {
+                                    $uniqueKey = $entry['samplelayer'] . '|' . $entry['sampledepth'] . '|' . $entry['itemname'];
+                                    $keyedEntries[$uniqueKey] = $entry;
+                                }
+                                $entries = $keyedEntries;
+                            }
+                        }
+                    }
+                    unset($siteInfo, $entries);
                 }
 
                 // Merge with new data
