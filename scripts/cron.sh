@@ -9,6 +9,15 @@ echo "Starting data fetch process..."
 echo "Project directory: $PROJECT_DIR"
 echo "Data directory: $DATA_DIR"
 
+# Pull latest changes from data repository
+echo "Pulling latest changes from data repository..."
+cd "$DATA_DIR"
+git pull
+
+if [ $? -ne 0 ]; then
+    echo "Warning: Failed to pull latest changes, continuing anyway..."
+fi
+
 # Execute the fetch script
 cd "$PROJECT_DIR"
 php "$SCRIPT_DIR/01_fetch.php"
