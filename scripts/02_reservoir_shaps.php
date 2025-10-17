@@ -3,6 +3,10 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use GuzzleHttp\Client;
 
+// Increase PCRE limits for large SVG files
+ini_set('pcre.backtrack_limit', '10000000');
+ini_set('pcre.recursion_limit', '10000000');
+
 // Initialize cookie jar for maintaining session
 $cookieJar = new \GuzzleHttp\Cookie\CookieJar();
 
@@ -71,6 +75,16 @@ try {
             continue;
         }
 
+        // Clean filename
+        $filename = preg_replace('/[^a-zA-Z0-9_\-\x{4e00}-\x{9fa5}]/u', '_', $text);
+        $filepath = $shapsDir . '/' . $filename . '.svg';
+
+        // Skip if SVG file already exists
+        if (file_exists($filepath)) {
+            echo "Skipping: {$text} (already exists)\n";
+            continue;
+        }
+
         echo "Processing: {$text} (value: {$value})\n";
 
         try {
@@ -97,32 +111,21 @@ try {
             $responseBody = $response->getBody()->getContents();
 
             // ASP.NET AJAX returns a special delta format, not full HTML
-            // Extract the SVG from the delta response (looking for div.map with svgDam)
-            if (preg_match('/<div class=.map.>.*?<\/figure>/s', $responseBody, $matches)) {
-                $htmlFragment = $matches[0];
+            // Extract the SVG from the delta response (looking for SVG with class="svgDam")
+            if (preg_match('/<svg[^>]*class="svgDam"[^>]*>.*?<\/svg>/s', $responseBody, $svgMatches)) {
+                $svgContent = '<?xml version="1.0" encoding="utf-8"?>' . "\n";
+                $svgContent .= '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' . "\n";
+                $svgContent .= $svgMatches[0];
 
-                // Extract SVG with class="svgDam" from the HTML fragment
-                if (preg_match('/<svg[^>]*class=.svgDam.*?<\/svg>/s', $htmlFragment, $svgMatches)) {
-                    $svgContent = '<?xml version="1.0" encoding="utf-8"?>' . "\n";
-                    $svgContent .= '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' . "\n";
-                    $svgContent .= $svgMatches[0];
+                file_put_contents($filepath, $svgContent);
+                echo "Saved SVG to: {$filepath}\n";
 
-                    // Clean filename
-                    $filename = preg_replace('/[^a-zA-Z0-9_\-\x{4e00}-\x{9fa5}]/u', '_', $text);
-                    $filepath = $shapsDir . '/' . $filename . '.svg';
-
-                    file_put_contents($filepath, $svgContent);
-                    echo "Saved SVG to: {$filepath}\n";
-
-                    // Update hidden fields from response
-                    if (preg_match('/\|__VIEWSTATE\|([^|]+)\|/', $responseBody, $vsMatch)) {
-                        $hiddenFields['__VIEWSTATE'] = $vsMatch[1];
-                    }
-                    if (preg_match('/\|__EVENTVALIDATION\|([^|]+)\|/', $responseBody, $evMatch)) {
-                        $hiddenFields['__EVENTVALIDATION'] = $evMatch[1];
-                    }
-                } else {
-                    echo "Could not extract SVG from response for {$text}\n";
+                // Update hidden fields from response
+                if (preg_match('/\|__VIEWSTATE\|([^|]+)\|/', $responseBody, $vsMatch)) {
+                    $hiddenFields['__VIEWSTATE'] = $vsMatch[1];
+                }
+                if (preg_match('/\|__EVENTVALIDATION\|([^|]+)\|/', $responseBody, $evMatch)) {
+                    $hiddenFields['__EVENTVALIDATION'] = $evMatch[1];
                 }
             } else {
                 echo "No reservoir data found for {$text}\n";
